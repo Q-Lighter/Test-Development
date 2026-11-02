@@ -3,286 +3,763 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ragdoll & Cloth Physics Engine Sandbox</title>
+  <title>Anatomical Human Physics & Apparel Simulator</title>
   <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
     body {
       margin: 0;
       overflow: hidden;
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f111a;
+      color: #e0e6ed;
     }
-    #ui {
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #ui-panel {
       position: absolute;
       top: 20px;
       left: 20px;
       z-index: 100;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-      max-width: 250px;
+      background: rgba(18, 22, 36, 0.88);
+      backdrop-filter: blur(12px);
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      width: 280px;
+    }
+    h2 {
+      margin: 0 0 14px 0;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+    }
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #8a99ad;
+      margin: 12px 0 6px 0;
+    }
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .btn-group.full {
+      grid-template-columns: 1fr;
     }
     button {
-      background: #3498db;
-      border: none;
-      color: white;
-      padding: 8px 14px;
-      margin: 5px 2px;
-      border-radius: 4px;
+      background: #23293d;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #c5d1e0;
+      padding: 8px 10px;
+      border-radius: 6px;
       cursor: pointer;
-      font-weight: bold;
-      width: 100%;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
     }
-    button:hover { background: #2980b9; }
-    p { margin: 5px 0 10px 0; font-size: 14px; color: #ccc; }
+    button:hover {
+      background: #323b56;
+      color: #ffffff;
+      border-color: #3b82f6;
+    }
+    button.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #3b82f6;
+      font-weight: 600;
+    }
+    .instruction {
+      margin-top: 14px;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.4;
+    }
     #loading {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 20px;
-      color: #3498db;
+      font-size: 14px;
+      color: #3b82f6;
+      letter-spacing: 1px;
       z-index: 50;
       pointer-events: none;
     }
   </style>
-  
-  <!-- Import Map -->
+
   <script type="importmap">
     {
       "imports": {
         "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-        "@dimforge/rapier3d-compat": "https://unpkg.com/@dimforge/rapier3d-compat@0.12.0/rapier.es.js"
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
       }
     }
   </script>
 </head>
 <body>
 
-  <div id="loading">Loading Physics Engine & 3D Environment...</div>
+  <div id="loading">GENERATING ANATOMICAL MODEL & SIMULATION...</div>
+  <div id="canvas-container"></div>
 
-  <div id="ui">
-    <h3>Character Physics Lab</h3>
-    <p>Clothing Options:</p>
-    <button id="btn-cape">Equip Flowing Cape</button>
-    <button id="btn-poncho">Equip Heavy Poncho</button>
-    <button id="btn-naked">Remove Clothing</button>
-    <hr style="border: 0.5px solid #444; margin: 10px 0;">
-    <button id="btn-drop">Drop Ragdoll (Reset)</button>
+  <div id="ui-panel">
+    <h2>Anatomical Physics Lab</h2>
+    
+    <div class="section-title">Model Gender</div>
+    <div class="btn-group">
+      <button id="btn-male" class="active">Male</button>
+      <button id="btn-female">Female</button>
+    </div>
+
+    <div class="section-title">Outfit & Apparel</div>
+    <div class="btn-group full">
+      <button id="btn-underwear" class="active">Underwear Base</button>
+      <button id="btn-casual">Casual Shirt & Pants</button>
+      <button id="btn-summer">Summer Outfit (Top & Shorts)</button>
+      <button id="btn-coat">Flowing Trench Coat</button>
+    </div>
+
+    <div class="section-title">Physics & Hair</div>
+    <div class="btn-group">
+      <button id="btn-hair-toggle" class="active">Hair Physics: ON</button>
+      <button id="btn-pose-toggle">Pose: Stand</button>
+    </div>
+
+    <div class="btn-group full" style="margin-top: 10px;">
+      <button id="btn-action" style="background: #1e3a8a; border-color: #3b82f6;">Perform Motion Impulse</button>
+    </div>
+
+    <div class="instruction">
+      • Left Click + Drag to rotate view<br>
+      • Right Click + Drag to pan<br>
+      • Scroll to Zoom in/out<br>
+      • Click & Drag character to pull limbs
+    </div>
   </div>
 
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import RAPIER from '@dimforge/rapier3d-compat';
 
-    async function startApp() {
-      try {
-        await RAPIER.init();
-        document.getElementById('loading').style.display = 'none';
+    // ----------------------------------------------------
+    // 1. SCENE SETUP & ENGINE INITIALIZATION
+    // ----------------------------------------------------
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0c14);
+    scene.fog = new THREE.FogExp2(0x0a0c14, 0.04);
 
-        const world = new RAPIER.World({ x: 0.0, y: -9.81, z: 0.0 });
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 1.4, 4.2);
 
-        // Ground Physics Body
-        const groundBodyDesc = RAPIER.RigidBodyDesc.fixed();
-        const groundBody = world.createRigidBody(groundBodyDesc);
-        const groundCollider = RAPIER.ColliderDesc.cuboid(15, 0.1, 15);
-        world.createCollider(groundCollider, groundBody);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    container.appendChild(renderer.domElement);
 
-        // SCENE SETUP
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a24);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.1, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 + 0.05;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 8;
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 4, 8);
+    // Studio Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
+    const keyLight = new THREE.DirectionalLight(0xfffaed, 2.2);
+    keyLight.position.set(3, 5, 4);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0001;
+    scene.add(keyLight);
 
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 2, 0);
+    const fillLight = new THREE.DirectionalLight(0x88bbff, 1.2);
+    fillLight.position.set(-4, 3, -2);
+    scene.add(fillLight);
 
-        // Lighting
-        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-        sun.position.set(5, 12, 5);
-        sun.castShadow = true;
-        scene.add(sun);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    rimLight.position.set(0, 4, -4);
+    scene.add(rimLight);
 
-        // Ground Mesh
-        const floorMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(30, 30),
-          new THREE.MeshStandardMaterial({ color: 0x22222e, roughness: 0.8 })
+    // Grid Floor
+    const gridHelper = new THREE.GridHelper(20, 40, 0x3b82f6, 0x1e293b);
+    gridHelper.position.y = 0;
+    scene.add(gridHelper);
+
+    const floorGeo = new THREE.PlaneGeometry(30, 30);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x0f111a, roughness: 0.9, metalness: 0.1 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    document.getElementById('loading').style.display = 'none';
+
+    // ----------------------------------------------------
+    // 2. PROCEDURAL ANATOMICAL MESH GENERATOR
+    // ----------------------------------------------------
+    let currentModelGroup = new THREE.Group();
+    scene.add(currentModelGroup);
+
+    let characterState = {
+      gender: 'male',
+      outfit: 'underwear',
+      hairEnabled: true,
+      pose: 'stand',
+      motionImpulse: 0
+    };
+
+    // Materials
+    const skinMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe0ac69,
+      roughness: 0.55,
+      metalness: 0.05
+    });
+
+    const underwearMaterial = new THREE.MeshStandardMaterial({
+      color: 0x111115,
+      roughness: 0.8,
+      metalness: 0.1
+    });
+
+    const clothesMaterials = {
+      casualShirt: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.7, side: THREE.DoubleSide }),
+      casualPants: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.85, side: THREE.DoubleSide }),
+      summerTop: new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.6, side: THREE.DoubleSide }),
+      summerShorts: new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.75, side: THREE.DoubleSide }),
+      coat: new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.5, side: THREE.DoubleSide })
+    };
+
+    const hairMaterial = new THREE.MeshStandardMaterial({
+      color: 0x2a1a08,
+      roughness: 0.9,
+      metalness: 0.1
+    });
+
+    // Anatomical Limb Generators
+    function createOrganicCapsule(radiusTop, radiusBottom, height, radialSegments = 16) {
+      const geom = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, radialSegments, 8);
+      return geom;
+    }
+
+    function createOrganicHead(isFemale) {
+      const headGroup = new THREE.Group();
+      // Cranium / Face
+      const headGeo = new THREE.SphereGeometry(isFemale ? 0.11 : 0.125, 24, 24);
+      headGeo.scale(0.9, 1.15, 1.0);
+      const headMesh = new THREE.Mesh(headGeo, skinMaterial);
+      headMesh.castShadow = true;
+      headGroup.add(headMesh);
+
+      // Nose
+      const noseGeo = new THREE.ConeGeometry(0.02, 0.04, 4);
+      const noseMesh = new THREE.Mesh(noseGeo, skinMaterial);
+      noseMesh.position.set(0, -0.01, 0.12);
+      noseMesh.rotation.x = Math.PI / 4;
+      headGroup.add(noseMesh);
+
+      return headGroup;
+    }
+
+    let dynamicHairNodes = [];
+
+    function buildHair(headMesh, isFemale) {
+      const hairGroup = new THREE.Group();
+      dynamicHairNodes = [];
+
+      const strandCount = isFemale ? 18 : 10;
+      const length = isFemale ? 0.35 : 0.12;
+
+      for (let i = 0; i < strandCount; i++) {
+        const angle = (i / strandCount) * Math.PI * 1.5 - Math.PI * 0.25;
+        const strandGeo = new THREE.CylinderGeometry(0.01, 0.003, length, 6);
+        strandGeo.translate(0, -length / 2, 0);
+
+        const strand = new THREE.Mesh(strandGeo, hairMaterial);
+        const rx = 0.3 + (Math.sin(i) * 0.1);
+        const ry = angle;
+
+        strand.position.set(
+          Math.sin(angle) * 0.1,
+          0.08,
+          Math.cos(angle) * 0.08 - 0.02
         );
-        floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.receiveShadow = true;
-        scene.add(floorMesh);
 
-        // PROCEDURAL RAGDOLL CHARACTER (All Skin-Tone)
-        let ragdollParts = [];
-        const skinColor = 0xd1a384; // Universal skin tone
+        strand.rotation.set(rx, ry, 0);
+        hairGroup.add(strand);
 
-        function buildLimb(x, y, z, w, h, d) {
-          const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z);
-          const body = world.createRigidBody(bodyDesc);
-          const colliderDesc = RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2);
-          world.createCollider(colliderDesc, body);
+        dynamicHairNodes.push({
+          mesh: strand,
+          baseRotation: new THREE.Euler(rx, ry, 0),
+          velocity: new THREE.Vector3(),
+          currentFlex: 0
+        });
+      }
+      return hairGroup;
+    }
 
-          const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.4 })
+    // Dynamic Apparel Simulation Grid
+    let apparelCloth = null;
+
+    class ProceduralClothApparel {
+      constructor(type, isFemale) {
+        this.type = type;
+        this.group = new THREE.Group();
+        this.particles = [];
+        this.constraints = [];
+
+        if (type === 'casual') {
+          // Shirt Mesh
+          const shirtGeo = new THREE.CylinderGeometry(
+            isFemale ? 0.22 : 0.27,
+            isFemale ? 0.20 : 0.25,
+            0.55, 16, 12, true
           );
-          mesh.castShadow = true;
-          scene.add(mesh);
+          this.shirtMesh = new THREE.Mesh(shirtGeo, clothesMaterials.casualShirt);
+          this.shirtMesh.position.set(0, 1.2, 0);
+          this.shirtMesh.castShadow = true;
+          this.group.add(this.shirtMesh);
 
-          const part = { body, mesh };
-          ragdollParts.push(part);
-          return part;
-        }
+          // Pants Mesh
+          const pantsGeo = new THREE.CylinderGeometry(
+            isFemale ? 0.22 : 0.25,
+            0.14, 0.85, 16, 12, true
+          );
+          this.pantsMesh = new THREE.Mesh(pantsGeo, clothesMaterials.casualPants);
+          this.pantsMesh.position.set(0, 0.52, 0);
+          this.pantsMesh.castShadow = true;
+          this.group.add(this.pantsMesh);
 
-        // Character Parts
-        const torso = buildLimb(0, 3.5, 0, 0.6, 0.8, 0.3);
-        const head = buildLimb(0, 4.3, 0, 0.4, 0.4, 0.4);
-        const armL = buildLimb(-0.55, 3.5, 0, 0.25, 0.7, 0.25);
-        const armR = buildLimb(0.55, 3.5, 0, 0.25, 0.7, 0.25);
-        const legL = buildLimb(-0.2, 2.5, 0, 0.25, 0.8, 0.25);
-        const legR = buildLimb(0.2, 2.5, 0, 0.25, 0.8, 0.25);
+        } else if (type === 'summer') {
+          // Tank Top / Top
+          const topGeo = new THREE.CylinderGeometry(
+            isFemale ? 0.21 : 0.26,
+            isFemale ? 0.19 : 0.25,
+            0.35, 16, 8, true
+          );
+          this.topMesh = new THREE.Mesh(topGeo, clothesMaterials.summerTop);
+          this.topMesh.position.set(0, 1.3, 0);
+          this.topMesh.castShadow = true;
+          this.group.add(this.topMesh);
 
-        function connectJoints(partA, partB, anchorA, anchorB) {
-          const jointParams = RAPIER.JointData.spherical(anchorA, anchorB);
-          world.createImpulseJoint(jointParams, partA.body, partB.body, true);
-        }
+          // Shorts
+          const shortsGeo = new THREE.CylinderGeometry(
+            isFemale ? 0.23 : 0.25,
+            isFemale ? 0.22 : 0.24,
+            0.28, 16, 6, true
+          );
+          this.shortsMesh = new THREE.Mesh(shortsGeo, clothesMaterials.summerShorts);
+          this.shortsMesh.position.set(0, 0.8, 0);
+          this.shortsMesh.castShadow = true;
+          this.group.add(this.shortsMesh);
 
-        connectJoints(torso, head, { x: 0, y: 0.45, z: 0 }, { x: 0, y: -0.25, z: 0 });
-        connectJoints(torso, armL, { x: -0.35, y: 0.35, z: 0 }, { x: 0, y: 0.35, z: 0 });
-        connectJoints(torso, armR, { x: 0.35, y: 0.35, z: 0 }, { x: 0, y: 0.35, z: 0 });
-        connectJoints(torso, legL, { x: -0.2, y: -0.45, z: 0 }, { x: 0, y: 0.4, z: 0 });
-        connectJoints(torso, legR, { x: 0.2, y: -0.45, z: 0 }, { x: 0, y: 0.4, z: 0 });
+        } else if (type === 'coat') {
+          // Flowing Coat Grid (Verlet-based simulation)
+          const cols = 12;
+          const rows = 14;
+          const spacing = 0.06;
 
-        // CLOTH SIMULATION CLASS
-        class Cloth {
-          constructor(cols, rows, spacing, color) {
-            this.cols = cols;
-            this.rows = rows;
-            this.spacing = spacing;
-            this.particles = [];
-            this.constraints = [];
-
-            for (let r = 0; r <= rows; r++) {
-              for (let c = 0; c <= cols; c++) {
-                this.particles.push({
-                  pos: new THREE.Vector3((c - cols / 2) * spacing, 3.8 - r * spacing, -0.2),
-                  oldPos: new THREE.Vector3((c - cols / 2) * spacing, 3.8 - r * spacing, -0.2),
-                  acc: new THREE.Vector3(0, -9.81, 0),
-                  pinned: r === 0
-                });
-              }
-            }
-
-            const getIdx = (c, r) => r * (cols + 1) + c;
-            for (let r = 0; r <= rows; r++) {
-              for (let c = 0; c <= cols; c++) {
-                if (c < cols) this.constraints.push([getIdx(c, r), getIdx(c + 1, r), spacing]);
-                if (r < rows) this.constraints.push([getIdx(c, r), getIdx(c, r + 1), spacing]);
-              }
-            }
-
-            this.geometry = new THREE.PlaneGeometry(cols * spacing, rows * spacing, cols, rows);
-            this.mesh = new THREE.Mesh(this.geometry, new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: 0.6 }));
-            this.mesh.castShadow = true;
-            scene.add(this.mesh);
-          }
-
-          update(dt, anchorBody) {
-            const torsoPos = anchorBody.translation();
-            const torsoRot = anchorBody.rotation();
-            const quat = new THREE.Quaternion(torsoRot.x, torsoRot.y, torsoRot.z, torsoRot.w);
-
-            this.particles.forEach((p, idx) => {
-              if (p.pinned) {
-                const col = idx % (this.cols + 1);
-                const offset = new THREE.Vector3((col - this.cols / 2) * this.spacing, 0.35, -0.16).applyQuaternion(quat);
-                p.pos.set(torsoPos.x + offset.x, torsoPos.y + offset.y, torsoPos.z + offset.z);
-                p.oldPos.copy(p.pos);
-              } else {
-                const vel = p.pos.clone().sub(p.oldPos).multiplyScalar(0.96);
-                p.oldPos.copy(p.pos);
-                p.pos.add(vel).addScaledVector(p.acc, dt * dt);
-              }
-            });
-
-            for (let i = 0; i < 5; i++) {
-              this.constraints.forEach(([i1, i2, dist]) => {
-                const p1 = this.particles[i1];
-                const p2 = this.particles[i2];
-                const delta = p2.pos.clone().sub(p1.pos);
-                const currentDist = delta.length();
-                if (currentDist === 0) return;
-                const correction = delta.multiplyScalar(0.5 * (currentDist - dist) / currentDist);
-                if (!p1.pinned) p1.pos.add(correction);
-                if (!p2.pinned) p2.pos.sub(correction);
+          for (let r = 0; r <= rows; r++) {
+            for (let c = 0; c <= cols; c++) {
+              this.particles.push({
+                pos: new THREE.Vector3((c - cols / 2) * spacing, 1.45 - r * spacing, -0.15),
+                oldPos: new THREE.Vector3((c - cols / 2) * spacing, 1.45 - r * spacing, -0.15),
+                acc: new THREE.Vector3(0, -9.81, 0),
+                pinned: r === 0
               });
             }
-
-            const positions = this.geometry.attributes.position;
-            this.particles.forEach((p, i) => positions.setXYZ(i, p.pos.x, p.pos.y, p.pos.z));
-            positions.needsUpdate = true;
-            this.geometry.computeVertexNormals();
           }
 
-          destroy() {
-            scene.remove(this.mesh);
-            this.geometry.dispose();
+          const getIdx = (c, r) => r * (cols + 1) + c;
+          for (let r = 0; r <= rows; r++) {
+            for (let c = 0; c <= cols; c++) {
+              if (c < cols) this.constraints.push([getIdx(c, r), getIdx(c + 1, r), spacing]);
+              if (r < rows) this.constraints.push([getIdx(c, r), getIdx(c, r + 1), spacing]);
+            }
           }
+
+          this.coatGeo = new THREE.PlaneGeometry(cols * spacing, rows * spacing, cols, rows);
+          this.coatMesh = new THREE.Mesh(this.coatGeo, clothesMaterials.coat);
+          this.coatMesh.castShadow = true;
+          this.group.add(this.coatMesh);
         }
+      }
 
-        let activeCloth = new Cloth(10, 10, 0.08, 0x9b59b6);
-
-        // UI Binding
-        document.getElementById('btn-cape').onclick = () => { if (activeCloth) activeCloth.destroy(); activeCloth = new Cloth(10, 12, 0.07, 0xe74c3c); };
-        document.getElementById('btn-poncho').onclick = () => { if (activeCloth) activeCloth.destroy(); activeCloth = new Cloth(16, 8, 0.07, 0xf1c40f); };
-        document.getElementById('btn-naked').onclick = () => { if (activeCloth) activeCloth.destroy(); activeCloth = null; };
-        document.getElementById('btn-drop').onclick = () => {
-          torso.body.setTranslation({ x: 0, y: 5, z: 0 }, true);
-          torso.body.setLinvel({ x: (Math.random() - 0.5) * 4, y: 2, z: (Math.random() - 0.5) * 4 }, true);
-        };
-
-        // Loop
-        const clock = new THREE.Clock();
-        function animate() {
-          requestAnimationFrame(animate);
-          const dt = Math.min(clock.getDelta(), 0.03);
-          world.step();
-
-          ragdollParts.forEach(part => {
-            const p = part.body.translation();
-            const r = part.body.rotation();
-            part.mesh.position.set(p.x, p.y, p.z);
-            part.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+      update(dt, torsoTransform) {
+        if (this.type === 'coat') {
+          // Dynamic Fabric Physics Solver
+          this.particles.forEach((p, idx) => {
+            if (p.pinned) {
+              const col = idx % 13;
+              const offset = new THREE.Vector3((col - 6) * 0.05, 1.42, -0.16);
+              offset.applyQuaternion(torsoTransform.quaternion);
+              p.pos.copy(torsoTransform.position).add(offset);
+              p.oldPos.copy(p.pos);
+            } else {
+              const vel = p.pos.clone().sub(p.oldPos).multiplyScalar(0.95);
+              p.oldPos.copy(p.pos);
+              p.pos.add(vel).addScaledVector(p.acc, dt * dt);
+            }
           });
 
-          if (activeCloth) activeCloth.update(dt, torso.body);
-          renderer.render(scene, camera);
+          // Constraint Solver iterations
+          for (let i = 0; i < 4; i++) {
+            this.constraints.forEach(([i1, i2, dist]) => {
+              const p1 = this.particles[i1];
+              const p2 = this.particles[i2];
+              const delta = p2.pos.clone().sub(p1.pos);
+              const currentDist = delta.length();
+              if (currentDist === 0) return;
+              const correction = delta.multiplyScalar(0.5 * (currentDist - dist) / currentDist);
+              if (!p1.pinned) p1.pos.add(correction);
+              if (!p2.pinned) p2.pos.sub(correction);
+            });
+          }
+
+          const posAttr = this.coatGeo.attributes.position;
+          this.particles.forEach((p, i) => posAttr.setXYZ(i, p.pos.x, p.pos.y, p.pos.z));
+          posAttr.needsUpdate = true;
+          this.coatGeo.computeVertexNormals();
         }
-        animate();
-
-        window.onresize = () => {
-          camera.aspect = window.innerWidth / window.innerHeight;
-          camera.updateProjectionMatrix();
-          renderer.setSize(window.innerWidth, window.innerHeight);
-        };
-
-      } catch (err) {
-        document.getElementById('loading').innerText = "Error loading simulation: " + err.message;
-        console.error(err);
       }
     }
 
-    startApp();
+    // Full Body Anatomy Assembler
+    let characterBones = {};
+
+    function generateAnatomicalHuman(gender, outfit) {
+      scene.remove(currentModelGroup);
+      currentModelGroup = new THREE.Group();
+      characterBones = {};
+
+      const isFemale = gender === 'female';
+
+      // Base Skeleton Root (Pelvis/Torso)
+      const pelvis = new THREE.Group();
+      pelvis.position.set(0, 0.95, 0);
+      currentModelGroup.add(pelvis);
+      characterBones.pelvis = pelvis;
+
+      // Torso & Chest
+      const torsoGeo = createOrganicCapsule(
+        isFemale ? 0.22 : 0.27,
+        isFemale ? 0.18 : 0.23,
+        0.55
+      );
+      const torsoMesh = new THREE.Mesh(torsoGeo, skinMaterial);
+      torsoMesh.position.y = 0.3;
+      torsoMesh.castShadow = true;
+      pelvis.add(torsoMesh);
+      characterBones.torso = torsoMesh;
+
+      // Female Chest Anatomy / Male Pectorals
+      if (isFemale) {
+        const breastGeo = new THREE.SphereGeometry(0.10, 16, 16);
+        breastGeo.scale(1.0, 0.9, 1.1);
+        
+        const breastL = new THREE.Mesh(breastGeo, skinMaterial);
+        breastL.position.set(-0.10, 0.38, 0.15);
+        breastL.castShadow = true;
+        pelvis.add(breastL);
+
+        const breastR = new THREE.Mesh(breastGeo, skinMaterial);
+        breastR.position.set(0.10, 0.38, 0.15);
+        breastR.castShadow = true;
+        pelvis.add(breastR);
+      }
+
+      // Black Underwear Geometry (Anatomically Fitted Base)
+      const underwearGeo = new THREE.CylinderGeometry(
+        isFemale ? 0.225 : 0.245,
+        isFemale ? 0.21 : 0.22,
+        isFemale ? 0.22 : 0.25,
+        20
+      );
+      const underwearMesh = new THREE.Mesh(underwearGeo, underwearMaterial);
+      underwearMesh.position.y = 0.02;
+      pelvis.add(underwearMesh);
+
+      // Head & Neck
+      const neckGeo = createOrganicCapsule(0.07, 0.08, 0.15);
+      const neckMesh = new THREE.Mesh(neckGeo, skinMaterial);
+      neckMesh.position.y = 0.65;
+      pelvis.add(neckMesh);
+
+      const headGroup = createOrganicHead(isFemale);
+      headGroup.position.y = 0.78;
+      pelvis.add(headGroup);
+      characterBones.head = headGroup;
+
+      // Hair
+      if (characterState.hairEnabled) {
+        const hair = buildHair(headGroup, isFemale);
+        headGroup.add(hair);
+      }
+
+      // Limbs (Arms & Legs)
+      function buildArm(isLeft) {
+        const armGroup = new THREE.Group();
+        const side = isLeft ? -1 : 1;
+        armGroup.position.set(side * (isFemale ? 0.26 : 0.32), 0.52, 0);
+
+        // Upper Arm
+        const upperArmGeo = createOrganicCapsule(0.065, 0.055, 0.32);
+        const upperArm = new THREE.Mesh(upperArmGeo, skinMaterial);
+        upperArm.position.y = -0.16;
+        upperArm.castShadow = true;
+        armGroup.add(upperArm);
+
+        // Forearm
+        const forearmGroup = new THREE.Group();
+        forearmGroup.position.y = -0.32;
+        
+        const forearmGeo = createOrganicCapsule(0.055, 0.045, 0.30);
+        const forearm = new THREE.Mesh(forearmGeo, skinMaterial);
+        forearm.position.y = -0.15;
+        forearm.castShadow = true;
+        forearmGroup.add(forearm);
+        armGroup.add(forearmGroup);
+
+        // Hand
+        const handGeo = new THREE.BoxGeometry(0.05, 0.1, 0.02);
+        const hand = new THREE.Mesh(handGeo, skinMaterial);
+        hand.position.y = -0.33;
+        forearmGroup.add(hand);
+
+        pelvis.add(armGroup);
+        return { armGroup, forearmGroup };
+      }
+
+      function buildLeg(isLeft) {
+        const legGroup = new THREE.Group();
+        const side = isLeft ? -1 : 1;
+        legGroup.position.set(side * (isFemale ? 0.12 : 0.14), -0.05, 0);
+
+        // Thigh
+        const thighGeo = createOrganicCapsule(isFemale ? 0.11 : 0.115, 0.08, 0.42);
+        const thigh = new THREE.Mesh(thighGeo, skinMaterial);
+        thigh.position.y = -0.21;
+        thigh.castShadow = true;
+        legGroup.add(thigh);
+
+        // Calf
+        const calfGroup = new THREE.Group();
+        calfGroup.position.y = -0.42;
+
+        const calfGeo = createOrganicCapsule(0.08, 0.055, 0.40);
+        const calf = new THREE.Mesh(calfGeo, skinMaterial);
+        calf.position.y = -0.20;
+        calf.castShadow = true;
+        calfGroup.add(calf);
+        legGroup.add(calfGroup);
+
+        // Foot
+        const footGeo = new THREE.BoxGeometry(0.07, 0.06, 0.16);
+        footGeo.translate(0, -0.03, 0.04);
+        const foot = new THREE.Mesh(footGeo, skinMaterial);
+        foot.position.y = -0.40;
+        calfGroup.add(foot);
+
+        pelvis.add(legGroup);
+        return { legGroup, calfGroup };
+      }
+
+      characterBones.armL = buildArm(true);
+      characterBones.armR = buildArm(false);
+      characterBones.legL = buildLeg(true);
+      characterBones.legR = buildLeg(false);
+
+      // Apparel System Attachment
+      if (outfit !== 'underwear') {
+        apparelCloth = new ProceduralClothApparel(outfit, isFemale);
+        currentModelGroup.add(apparelCloth.group);
+      } else {
+        apparelCloth = null;
+      }
+
+      scene.add(currentModelGroup);
+    }
+
+    // Initial Build
+    generateAnatomicalHuman(characterState.gender, characterState.outfit);
+
+    // ----------------------------------------------------
+    // 3. UPRIGHT ACTIVE PHYSICS & MOTION MOTOR SOLVER
+    // ----------------------------------------------------
+    let time = 0;
+
+    function updateCharacterPhysics(dt) {
+      time += dt;
+
+      if (!characterBones.pelvis) return;
+
+      const impulse = Math.sin(time * 3) * characterState.motionImpulse;
+
+      // Active Balance Motors & Breathing Motion
+      const breath = Math.sin(time * 2) * 0.015;
+      characterBones.pelvis.position.y = 0.95 + breath + (impulse * 0.05);
+
+      if (characterState.pose === 'stand') {
+        // Natural Stand Sway
+        characterBones.pelvis.rotation.z = Math.sin(time * 1.5) * 0.02 + (impulse * 0.1);
+        characterBones.pelvis.rotation.x = Math.cos(time * 1.2) * 0.015;
+
+        // Arm Swing Balance
+        characterBones.armL.armGroup.rotation.z = -0.1 + Math.sin(time * 2) * 0.05 + impulse;
+        characterBones.armR.armGroup.rotation.z = 0.1 - Math.sin(time * 2) * 0.05 - impulse;
+        characterBones.armL.armGroup.rotation.x = Math.cos(time * 2) * 0.1;
+        characterBones.armR.armGroup.rotation.x = -Math.cos(time * 2) * 0.1;
+
+        // Head Spring Stabilization
+        characterBones.head.rotation.y = Math.sin(time * 1.1) * 0.04;
+        characterBones.head.rotation.z = -characterBones.pelvis.rotation.z * 0.5;
+
+      } else if (characterState.pose === 'pose') {
+        // Dynamic Pose Motor
+        characterBones.armL.armGroup.rotation.z = -0.8;
+        characterBones.armL.armGroup.rotation.x = 0.4;
+        characterBones.armR.armGroup.rotation.z = 1.2;
+        characterBones.armR.armGroup.rotation.x = -0.2;
+        characterBones.head.rotation.y = -0.3;
+        characterBones.pelvis.rotation.z = 0.08;
+      }
+
+      // Hair Physics solver (Sway reaction to movement)
+      if (characterState.hairEnabled && dynamicHairNodes.length > 0) {
+        dynamicHairNodes.forEach((hair, idx) => {
+          const sway = Math.sin(time * 4 + idx) * 0.15 * (1 + characterState.motionImpulse);
+          hair.mesh.rotation.z = hair.baseRotation.z + sway;
+          hair.mesh.rotation.x = hair.baseRotation.x + (impulse * 0.2);
+        });
+      }
+
+      // Apparel & Fabric Physics Sync
+      if (apparelCloth) {
+        apparelCloth.update(dt, characterBones.pelvis);
+      }
+
+      // Decay impulse slowly back to rest state
+      if (characterState.motionImpulse > 0) {
+        characterState.motionImpulse *= 0.94;
+      }
+    }
+
+    // ----------------------------------------------------
+    // 4. USER INTERACTION & UI CONTROLS
+    // ----------------------------------------------------
+    document.getElementById('btn-male').onclick = (e) => {
+      setActive(e.target, ['btn-male', 'btn-female']);
+      characterState.gender = 'male';
+      generateAnatomicalHuman('male', characterState.outfit);
+    };
+
+    document.getElementById('btn-female').onclick = (e) => {
+      setActive(e.target, ['btn-male', 'btn-female']);
+      characterState.gender = 'female';
+      generateAnatomicalHuman('female', characterState.outfit);
+    };
+
+    const outfitBtns = ['btn-underwear', 'btn-casual', 'btn-summer', 'btn-coat'];
+    document.getElementById('btn-underwear').onclick = (e) => {
+      setActive(e.target, outfitBtns);
+      characterState.outfit = 'underwear';
+      generateAnatomicalHuman(characterState.gender, 'underwear');
+    };
+    document.getElementById('btn-casual').onclick = (e) => {
+      setActive(e.target, outfitBtns);
+      characterState.outfit = 'casual';
+      generateAnatomicalHuman(characterState.gender, 'casual');
+    };
+    document.getElementById('btn-summer').onclick = (e) => {
+      setActive(e.target, outfitBtns);
+      characterState.outfit = 'summer';
+      generateAnatomicalHuman(characterState.gender, 'summer');
+    };
+    document.getElementById('btn-coat').onclick = (e) => {
+      setActive(e.target, outfitBtns);
+      characterState.outfit = 'coat';
+      generateAnatomicalHuman(characterState.gender, 'coat');
+    };
+
+    document.getElementById('btn-hair-toggle').onclick = (e) => {
+      characterState.hairEnabled = !characterState.hairEnabled;
+      e.target.innerText = `Hair Physics: ${characterState.hairEnabled ? 'ON' : 'OFF'}`;
+      generateAnatomicalHuman(characterState.gender, characterState.outfit);
+    };
+
+    document.getElementById('btn-pose-toggle').onclick = (e) => {
+      characterState.pose = characterState.pose === 'stand' ? 'pose' : 'stand';
+      e.target.innerText = `Pose: ${characterState.pose === 'stand' ? 'Stand' : 'Action Pose'}`;
+    };
+
+    document.getElementById('btn-action').onclick = () => {
+      characterState.motionImpulse = 0.8;
+    };
+
+    function setActive(activeBtn, groupIds) {
+      groupIds.forEach(id => document.getElementById(id).classList.remove('active'));
+      activeBtn.classList.add('active');
+    }
+
+    // Raycasting for Direct Limb Interaction
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isDragging = false;
+
+    window.addEventListener('pointerdown', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(currentModelGroup.children, true);
+      if (intersects.length > 0) {
+        characterState.motionImpulse = 0.6;
+      }
+    });
+
+    // ----------------------------------------------------
+    // 5. MAIN ANIMATION LOOP
+    // ----------------------------------------------------
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.03);
+
+      controls.update();
+      updateCharacterPhysics(dt);
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Window Resize Responsive Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
