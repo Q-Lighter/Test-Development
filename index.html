@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ragdoll & Cloth Physics Engine Sandbox</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+    }
+    #ui {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    button {
+      background: #3498db;
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      margin: 5px 2px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover { background: #2980b9; }
+    p { margin: 5px 0 10px 0; font-size: 14px; color: #ccc; }
+  </style>
+  
+  <!-- Import Three.js and Physics Engines via ES Modules -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "@dimforge/rapier3d-compat": "https://unpkg.com/@dimforge/rapier3d-compat@0.12.0/rapier.es.js"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="ui">
+    <h3>Character Physics & Fabric Lab</h3>
+    <p>Clothing Options:</p>
+    <button id="btn-cape">Equip Flowing Cape</button>
+    <button id="btn-poncho">Equip Heavy Poncho</button>
+    <button id="btn-naked">Remove Clothing</button>
+    <hr style="border: 0.5px solid #444; margin: 10px 0;">
+    <button id="btn-drop">Drop Ragdoll (Reset)</button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import RAPIER from '@dimforge/rapier3d-compat';
+
+    // 1. SCENE SETUP
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a24);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 4, 8);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 2, 0);
+
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(5, 12, 5);
+    sun.castShadow = true;
+    scene.add(sun);
+
+    // Ground Floor
+    const floorGeo = new THREE.PlaneGeometry(30, 30);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x22222e, roughness: 0.8 });
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.receiveShadow = true;
+    scene.add(floorMesh);
+
+    // 2. RAPIER PHYSICS SETUP
+    await RAPIER.init();
+    const world = new RAPIER.World({ x: 0.0, y: -9.81, z: 0.0 });
+
+    // Ground Physics Body
+    const groundBodyDesc = RAPIER.RigidBodyDesc.fixed();
+    const groundBody = world.createRigidBody(groundBodyDesc);
+    const groundCollider = RAPIER.ColliderDesc.cuboid(15, 0.1, 15);
+    world.createCollider(groundCollider, groundBody);
+
+    // 3. PROCEDURAL RAGDOLL CHARACTER
+    let ragdollParts = [];
+
+    function buildLimb(x, y, z, w, h, d, color = 0xd1a384) {
+      // Physics Body
+      const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z);
+      const body = world.createRigidBody(bodyDesc);
+      const colliderDesc = RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2);
+      world.createCollider(colliderDesc, body);
+
+      // Visual Mesh
+      const geometry = new THREE.BoxGeometry(w, h, d);
+      const material = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      scene.add(mesh);
+
+      const part = { body, mesh };
+      ragdollParts.push(part);
+      return part;
+    }
+
+    // Build Character Limbs & Attach Joint Constraints
+    const torso = buildLimb(0, 3.5, 0, 0.6, 0.8, 0.3, 0x34495e);
+    const head = buildLimb(0, 4.3, 0, 0.4, 0.4, 0.4, 0xe74c3c);
+    const armL = buildLimb(-0.55, 3.5, 0, 0.25, 0.7, 0.25);
+    const armR = buildLimb(0.55, 3.5, 0, 0.25, 0.7, 0.25);
+    const legL = buildLimb(-0.2, 2.5, 0, 0.25, 0.8, 0.25, 0x2c3e50);
+    const legR = buildLimb(0.2, 2.5, 0, 0.25, 0.8, 0.25, 0x2c3e50);
+
+    // Joint Helper (Spherical Joint Connections)
+    function connectJoints(partA, partB, anchorA, anchorB) {
+      const jointParams = RAPIER.JointData.spherical(anchorA, anchorB);
+      world.createJoint(jointParams, partA.body, partB.body, true);
+    }
+
+    connectJoints(torso, head, { x: 0, y: 0.45, z: 0 }, { x: 0, y: -0.25, z: 0 });
+    connectJoints(torso, armL, { x: -0.35, y: 0.35, z: 0 }, { x: 0, y: 0.35, z: 0 });
+    connectJoints(torso, armR, { x: 0.35, y: 0.35, z: 0 }, { x: 0, y: 0.35, z: 0 });
+    connectJoints(torso, legL, { x: -0.2, y: -0.45, z: 0 }, { x: 0, y: 0.4, z: 0 });
+    connectJoints(torso, legR, { x: 0.2, y: -0.45, z: 0 }, { x: 0, y: 0.4, z: 0 });
+
+    // 4. REALTIME CLOTH & FABRIC SIMULATOR (Mass-Spring System)
+    class Cloth {
+      constructor(cols, rows, spacing, color) {
+        this.cols = cols;
+        this.rows = rows;
+        this.spacing = spacing;
+        this.particles = [];
+        this.constraints = [];
+
+        // Build Particle Grid
+        for (let r = 0; r <= rows; r++) {
+          for (let c = 0; c <= cols; c++) {
+            const p = {
+              pos: new THREE.Vector3((c - cols / 2) * spacing, 3.8 - r * spacing, -0.2),
+              oldPos: new THREE.Vector3((c - cols / 2) * spacing, 3.8 - r * spacing, -0.2),
+              acc: new THREE.Vector3(0, -9.81, 0),
+              pinned: r === 0 // Pin top row to Torso
+            };
+            this.particles.push(p);
+          }
+        }
+
+        // Build Distance Constraints
+        const getIdx = (c, r) => r * (cols + 1) + c;
+        for (let r = 0; r <= rows; r++) {
+          for (let c = 0; c <= cols; c++) {
+            if (c < cols) this.constraints.push([getIdx(c, r), getIdx(c + 1, r), spacing]);
+            if (r < rows) this.constraints.push([getIdx(c, r), getIdx(c, r + 1), spacing]);
+          }
+        }
+
+        // Visual Mesh Setup
+        this.geometry = new THREE.PlaneGeometry(cols * spacing, rows * spacing, cols, rows);
+        this.material = new THREE.MeshStandardMaterial({
+          color,
+          side: THREE.DoubleSide,
+          roughness: 0.6
+        });
+        this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.mesh.castShadow = true;
+        scene.add(this.mesh);
+      }
+
+      update(dt, anchorBody) {
+        const torsoPos = anchorBody.translation();
+        const torsoRot = anchorBody.rotation();
+        const quat = new THREE.Quaternion(torsoRot.x, torsoRot.y, torsoRot.
